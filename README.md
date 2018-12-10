@@ -65,7 +65,7 @@ let toHtml md = Markdown.ToHtml(md, pipeline)
 
 Currently, this does not work on .NET Core.
 
-See Issue #1 .
+See [Issue #1](https://github.com/cannorin/Markdig.Extensions.Literate/issues/1).
 
 ``````fsharp
 module Main
