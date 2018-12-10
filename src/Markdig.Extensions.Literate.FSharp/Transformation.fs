@@ -8,6 +8,7 @@ namespace FSharp.Literate.Markdig
 
 open System
 open System.IO
+open System.Reflection
 
 open Markdig.Extensions.Literate
 
@@ -27,6 +28,15 @@ module Transformations =
     if String.IsNullOrEmpty x.language && x.commands |> Dict.containsKey "lang" then
       x.commands.["lang"]
     else x.language
+
+  let inline internal getAssemblyFromType (t:System.Type) = t.GetTypeInfo().Assembly
+
+  let inline internal fsCoreDirectory () =
+    try
+      let asm = getAssemblyFromType typeof<Microsoft.FSharp.Core.AutoOpenAttribute>
+      asm.Location |> Path.GetDirectoryName |> Some
+    with
+      | _ -> None
 
   let collectCodeSnippet x = seq {
       if not <| String.IsNullOrWhiteSpace x.language
@@ -80,6 +90,13 @@ module Transformations =
   let formatCodeSnippets ctx (path: string) (doc: LiterateCodeBlockSummary<string> list) =
     let name = Path.GetFileNameWithoutExtension(path)
 
+    let options =
+      seq {
+        yield! ctx.CompilerOptions |> Option.map Seq.singleton ?| Seq.empty
+        yield! fsCoreDirectory()   |> Option.map (sprintf "--lib:%s" >> Seq.singleton) ?| Seq.empty
+      }
+      |> String.concat " "
+
     // Extract all CodeBlocks and pass them to F# snippets
     let codes = doc |> Seq.collect collectCodeSnippet |> Array.ofSeq
     let snippetLookup, errors = 
@@ -103,7 +120,7 @@ module Transformations =
         let snippets, errors = 
           ctx.FormatAgent.ParseSource
             ( Path.ChangeExtension(path, ".fsx"), source, 
-              ?options = ctx.CompilerOptions, ?defines = ctx.DefinedSymbols )
+              options = options, ?defines = ctx.DefinedSymbols )
         [ for (_, code), (Snippet(_, fs)) in Array.zip codes snippets -> 
             code, fs |> List.map (fun x -> x)
         ] |> dict, errors

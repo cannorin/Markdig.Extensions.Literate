@@ -8,6 +8,11 @@ open Markdig.Extensions.Literate
 open Markdig.Extensions.Literate.FSharp
 
 let errors = ref [||]
+
+let inline showErrors () =
+  for error in !errors do
+    printfn "%A" error
+
 let pipeline =
   new MarkdownPipelineBuilder()
   |> Pipeline.useAdvancedExts
@@ -23,6 +28,7 @@ let test = 42
 ```
 """
   ignore <| Markdown.ToHtml(content, pipeline)
+  showErrors()
   !errors |> Array.length |> should equal 0
 
 [<Fact>]
@@ -34,6 +40,7 @@ let test = 42
 
 ```"""
   ignore <| Markdown.ToHtml(content, pipeline)
+  showErrors()
   !errors |> Array.length |> should equal 0
 
 [<Fact>]
@@ -42,5 +49,6 @@ let ``Can report errors in F# code snippets (in Markdown document)`` () =
 (** **hello** *)
 let test = 4 + 1.0"""
   ignore <| Markdown.ToHtml(content, pipeline)
+  showErrors()
   !errors |> Array.length |> should be (greaterThan 0)
 
