@@ -18,6 +18,9 @@ open FSharp.Literate.Markdig
 open FSharp.Markdown
 open FSharp.CodeFormat
 
+module internal Interop =
+  let inline fromCSAction1 (a: Action<_>) x = a.Invoke(x)
+
 type private Impl () =
   static let parsingContext formatAgent evaluator compilerOptions definedSymbols =
     let agent =
@@ -41,21 +44,24 @@ type private Impl () =
   static member Initialize
     (path, fsiObj, fsiOptions,
      formatAgent, compilerOptions, definedSymbols,
-     lineNumbers, includeSource, generateAnchors, replacements) =
+     lineNumbers, includeSource, generateAnchors, replacements,
+     errorHandler) =
+
+    let handler = errorHandler ?| ignore
+    let path = path ?| "C:\\Document.fsx"
+    let fsiOptions = fsiOptions ?| Array.empty
+
+    let fsi =
+      match fsiObj with
+        | Some fsi -> new FsiEvaluator(fsiOptions, fsi)
+        | None     -> new FsiEvaluator(fsiOptions)
+    
+    let parsingCtx =
+      parsingContext formatAgent (Some (fsi :> IFsiEvaluator)) compilerOptions definedSymbols
+    let formatCtx =
+      formattingContext (Some OutputKind.Html) None lineNumbers includeSource generateAnchors replacements
+
     fun codeBlocks ->
-      let path = path ?| "C:\\Document.fsx"
-      let fsiOptions = fsiOptions ?| Array.empty
-
-      let fsi =
-        match fsiObj with
-          | Some fsi -> new FsiEvaluator(fsiOptions, fsi)
-          | None     -> new FsiEvaluator(fsiOptions)
-      
-      let parsingCtx =
-        parsingContext formatAgent (Some (fsi :> IFsiEvaluator)) compilerOptions definedSymbols
-      let formatCtx =
-        formattingContext (Some OutputKind.Html) None lineNumbers includeSource generateAnchors replacements
-
       let evalMapping, errors =
         Transformations.createEvaluationMapping parsingCtx path codeBlocks
       let cbsEvaluated =
@@ -79,13 +85,15 @@ type private Impl () =
               sb.Clear() |> ignore
               html
             ))
+
+      handler errors
       
       List.zip
         (codeBlocks |> List.map (fun x -> x.index))
         cbsReplaced
-      |> dict, toolTip, errors
+      |> dict, toolTip
 
-  static member Render (mapping: dict<int, string option>, toolTip, errors) code =
+  static member Render (mapping: dict<int, string option>, toolTip) code =
     let cont =
       match mapping |> Dict.tryFind code.index with
         | None -> None
@@ -93,14 +101,10 @@ type private Impl () =
           Some <|
             fun (renderer: HtmlRenderer) (attributes: HtmlAttributes) ->
               str |> Option.iter (renderer.Write >> ignore)
-    (mapping, toolTip, errors), cont
+    (mapping, toolTip), cont
 
-  static member Finalize handler (_, toolTip: string, errors) (renderer: HtmlRenderer) =
+  static member Finalize (_, toolTip: string) (renderer: HtmlRenderer) =
     renderer.Write toolTip |> ignore
-    handler errors
-
-module internal Interop =
-  let inline fromCSAction1 (a: Action<_>) x = a.Invoke(x)
 
 [<Extension; Sealed>]
 type FSharpLiterateExtensions =
@@ -111,14 +115,14 @@ type FSharpLiterateExtensions =
      ?formatAgent, ?compilerOptions, ?definedSymbols,
      ?lineNumbers, ?includeSource, ?generateAnchors, ?replacements,
      ?errorHandler) =
-    let handler =
-      errorHandler |> Option.map Interop.fromCSAction1 ?| ignore
+    let errorHandler =
+      errorHandler |> Option.map Interop.fromCSAction1
     Pipeline.useLiterateCodeBlock
       (Impl.Initialize (path, fsiObj, fsiOptions,
         formatAgent, compilerOptions, definedSymbols,
-        lineNumbers, includeSource, generateAnchors, replacements))
+        lineNumbers, includeSource, generateAnchors, replacements, errorHandler))
       Impl.Render
-      (Impl.Finalize handler)
+      Impl.Finalize
       this
 
 [<Sealed>]
@@ -128,10 +132,9 @@ type Pipeline =
      ?formatAgent, ?compilerOptions, ?definedSymbols,
      ?lineNumbers, ?includeSource, ?generateAnchors, ?replacements,
      ?errorHandler) =
-    let handler = errorHandler ?| ignore
     Pipeline.useLiterateCodeBlock
       (Impl.Initialize (path, fsiObj, fsiOptions,
         formatAgent, compilerOptions, definedSymbols,
-        lineNumbers, includeSource, generateAnchors, replacements))
+        lineNumbers, includeSource, generateAnchors, replacements, errorHandler))
       Impl.Render
-      (Impl.Finalize handler)
+      Impl.Finalize
