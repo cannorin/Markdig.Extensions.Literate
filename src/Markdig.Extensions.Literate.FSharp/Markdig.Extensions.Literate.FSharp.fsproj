@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net471; netstandard2.0</TargetFrameworks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Markdig.Extensions.Literate/Markdig.Extensions.Literate.fsproj">
+      <Name>Markdig.Extensions.Literate.fsproj</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../Markdig.Extensions.Literate/prelude.fs" />
+    <Compile Include="Transformation.fs" />
+    <Compile Include="Extension.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FSharp.Compiler.Service" Version="25.0.1" />
+    <PackageReference Include="FSharp.Literate" Version="3.0.0-beta13" />
+  </ItemGroup>
+</Project>
